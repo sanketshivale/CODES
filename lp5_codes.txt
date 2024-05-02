@@ -1,0 +1,461 @@
+HPC
+-----	 Practical-1  -----
+#include <iostream>
+#include <queue>
+#include <stack>
+#include <omp.h>
+using namespace std;
+
+class Node {
+    public:
+        int data;
+        Node* left;
+        Node* right;
+        
+        Node(int data) {
+            this->data = data;
+            this->left = NULL;
+            this->right = NULL;
+        }
+};
+
+class Tree {
+    public:
+        Node* insert(Node* root, int data) {
+            if (!root) {
+                root = new Node(data);
+                return root;
+            }
+            queue<Node*> q;
+            q.push(root);
+            while (!q.empty()) {
+                Node* cur = q.front();
+                q.pop();
+                if (!cur->left) {
+                    cur->left = new Node(data);
+                    return root;
+                } else {
+                    q.push(cur->left);
+                }
+                
+                if (!cur->right) {
+                    cur->right = new Node(data);
+                    return root;
+                } else {
+                    q.push(cur->right);
+                }
+            }
+            return NULL;
+        }
+        
+        void bfs(Node* root) {
+            if (!root) {
+                cout << "Tree is empty" << endl;
+                return;
+            }
+            queue<Node*> q;
+            q.push(root);
+            
+            while (!q.empty()) {
+                
+                #pragma omp parallel for
+                for (int i = 0; i < q.size(); i++) {
+                    Node* cur;
+                    
+                    #pragma omp critical
+                    {
+                        cur = q.front();
+                        q.pop();
+                        cout << cur->data << " ";
+                    }
+                    
+                    #pragma omp critical
+                    {
+                        if (cur->left)
+                            q.push(cur->left);
+                        
+                        if (cur->right)
+                            q.push(cur->right);
+                    }
+                }
+            }
+            cout << endl;
+        }
+        
+        void dfs(Node* root) {
+            stack<Node*> st;
+            st.push(root);
+            while (!st.empty()) {
+                #pragma omp parallel for
+                for (int i = 0; i < st.size(); i++) {
+                    Node* cur = st.top();
+                    st.pop();
+                    cout << cur->data << " ";
+                    
+                    if (cur->left)
+                        st.push(cur->left);
+                        
+                    if (cur->right)
+                        st.push(cur->right);
+                }
+            }
+            cout << endl;
+        }
+};
+
+
+int main()
+{
+    Node* root = NULL;
+    Tree t;
+    root = t.insert(root, 10);
+    root = t.insert(root, 20);
+    root = t.insert(root, 30);
+    root = t.insert(root, 40);
+    
+   double start, end;
+
+   start = omp_get_wtime();
+    t.bfs(root);
+   end = omp_get_wtime();
+   cout << "Parallel BFS running duration: " << (end - start) << endl;
+   
+    start = omp_get_wtime();
+     t.dfs(root);
+    end = omp_get_wtime();
+    cout << "Parallel DFS running duration: " << (end - start) << endl;
+    
+    return 0;
+}
+
+-----  Practical-2  -----
+#include <iostream>
+#include <vector>
+#include <omp.h>
+using namespace std;
+
+class Sort {
+    public:
+        void bubbleSort(int arr[], int n);
+        void display(int arr[], int n);
+        void mergeSort(int arr[], int low, int high);
+        void merge(int arr[], int low, int mid, int high);
+};
+
+void Sort::bubbleSort(int arr[], int n) {
+    for (int i = 0; i < n; i++) {
+        #pragma omp parallel shared(arr)
+        for (int j = 0; j < n; j++) {
+            if (arr[i] < arr[j])
+                swap(arr[i], arr[j]);
+        }
+    }
+}
+
+void Sort::merge(int arr[], int low, int mid, int high) {
+    int n = high - low + 1;
+    vector<int> temp(n);
+    int i = low, j = mid+1, k = 0;
+    
+    while (i <= mid && j <= high) {
+        if (arr[i] <= arr[j]) {
+            temp[k++] = arr[i++];
+        } else {
+            temp[k++] = arr[j++];
+        }
+    }
+    
+    while (i <= mid) {
+        temp[k++] = arr[i++];
+    }
+    
+    while (j <= high) {
+        temp[k++] = arr[j++];
+    }
+    
+    for (int p = 0; p < n; p++) {
+        arr[low + p] = temp[p];
+    }
+}
+
+void Sort::mergeSort(int arr[], int low, int high) {
+    if (low < high) {
+        int mid = low + (high - low) / 2;
+        #pragma omp parallel sections
+        {
+            #pragma omp section
+            {
+                this->mergeSort(arr, low, mid);
+            }
+            
+            #pragma omp section
+            {
+                this->mergeSort(arr, mid+1, high);
+            }
+        }
+        this->merge(arr, low, mid, high);
+    }
+}
+
+void Sort::display(int arr[], int n) {
+    for (int i = 0; i < n; i++) {
+        cout << arr[i] << " ";
+    }
+    cout << endl;
+}
+
+
+int main()
+{
+    int arr[] = {23,34,2,45,12,5};
+    int n = sizeof(arr)/sizeof(arr[0]);
+    
+    Sort s;
+    
+    // double start = omp_get_wtime();
+    // s.bubbleSort(arr, n);
+    // double end = omp_get_wtime();
+    // cout << "Parallel Bubble sort duration: " << (end - start) << endl;
+    
+    double start = omp_get_wtime();
+    s.mergeSort(arr, 0, n-1);
+    double end = omp_get_wtime();
+    cout << "Parallel Merge sort duration: " << (end - start) << endl;
+    
+    s.display(arr, n);
+    
+    return 0;
+}
+-----  Practical-3  -----
+#include <iostream>
+#include <vector>
+#include <omp.h>
+using namespace std;
+
+void parallelMin(vector<int> arr, int n) {
+    int min = arr[0];
+    #pragma omp parallel reduction(min: min)
+    for (int i = 0; i < n; i++) {
+        if (min > arr[i])
+            min = arr[i];
+    }
+    
+    cout << "Parallel Min: " << min << endl;
+}
+
+void parallelMax(vector<int> arr, int n) {
+    int max = arr[0];
+    #pragma omp parallel reduction(max: max)
+    for (int i = 0; i < n; i++) {
+        if (max < arr[i])
+            max = arr[i];
+    }
+    
+    cout << "Parallel Max: " << max << endl;
+}
+
+void parallelSum(vector<int> arr, int n) {
+    int sum = 0;
+    #pragma omp parallel reduction (+: sum)
+    for (int i = 0; i < n; i++) {
+        sum += arr[i];
+    }
+    
+    cout << "Parallel Sum: " << sum << endl;
+}
+
+void parallelAvg(vector<int> arr, int n) {
+    int sum = 0;
+    #pragma omp parallel reduction (+: sum)
+    for (int i = 0; i < n; i++) {
+        sum += arr[i];
+    }
+    
+    cout << "Parallel Average: " << double(sum / n) << endl;
+}
+
+int main() {
+    vector<int> arr = {1, 26, 41, 48, 57, 59, 55, 74, 15, 96};
+    int n = arr.size();
+    
+    parallelMin(arr, n);
+    parallelMax(arr, n);
+    parallelSum(arr, n);
+    parallelAvg(arr, n);
+    
+    return 0;
+}
+
+-------- DL ---------
+---- practical-1: Boston Housing
+from keras.datasets import boston_housing
+from sklearn.model_selection import train_test_split
+
+(X_train, y_train), (X_test, y_test) = boston_housing.load_data()
+print(X_train, y_train)
+
+
+from keras.models import Sequential
+from keras.layers import Dense
+
+model = Sequential()
+
+model.add(Dense(128, input_shape=(13,), activation='relu', name='dense_1'))
+model.add(Dense(64, activation='relu', name='dense_2'))
+model.add(Dense(1, activation='linear', name='dense_output'))
+
+model.summary()
+
+
+model.compile(optimizer='adam', loss='mse', metrics=['mse'])
+history = model.fit(X_train, y_train, epochs=65, validation_split=0.05)
+
+
+mse_nn, mae_nn = model.evaluate(X_test, y_test)
+
+print('Mean Square Error', mse_nn)
+print('Mean Absolute Error', mae_nn)
+
+
+----practical-2: Binary Classification on IMDB Dataset
+from keras.datasets import imdb
+
+(X_train, y_train), (X_test, y_test) = imdb.load_data(num_words=10000)
+
+import numpy as np
+
+def vectorize_seq(sequences, dimensions=10000):
+    results = np.zeros((len(sequences), dimensions))
+    for i, sequence in enumerate(sequences):
+        results[i, sequence] = 1
+
+    return results
+
+X_train = vectorize_seq(X_train)
+X_test = vectorize_seq(X_test)
+
+y_train = np.asarray(y_train).astype('float32')
+y_test = np.asarray(y_test).astype('float32')
+
+from keras.models import Sequential
+from keras.layers import Dense
+
+model = Sequential()
+
+model.add(Dense(16, input_shape=(10000,), activation='relu'))
+model.add(Dense(16, activation='relu'))
+model.add(Dense(1, activation='sigmoid'))
+
+model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
+
+model.summary()
+
+history = model.fit(X_train, y_train, validation_split=0.2, epochs=10, batch_size=264)
+
+mse,mae = model.evaluate(X_test,y_test)
+
+print('MSE ',mse)
+print('MAE ',mae)
+
+y_predictions = model.predict(X_test)
+
+tests = []
+for i in y_test:
+    tests.append(int(i))
+
+predictions = []
+for i in y_predictions:
+    if i[0] > 0.5:
+        predictions.append(1)
+    else:
+        predictions.append(0)
+
+
+from sklearn.metrics import accuracy_score, recall_score, precision_score
+
+print('Accuracy:', accuracy_score(tests, predictions))
+print('Precision Score:', precision_score(tests, predictions))
+print('Recall Score:', recall_score(tests, predictions))
+
+---- practical-3: MNIST Fashion dataset
+import numpy as np
+import matplotlib.pyplot as plt
+
+from keras.datasets import fashion_mnist
+
+(X_train, y_train), (X_test, y_test) = fashion_mnist.load_data()
+
+class_names = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat', 'Sandal',
+               'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
+
+X_train.shape
+
+X_train = X_train / 255.0
+X_test = X_test / 255.0
+
+# Verify data is in correct format
+plt.figure(figsize = (10, 10))
+for i in range(25):
+  plt.subplot(5, 5, i + 1)
+  plt.xticks([])
+  plt.yticks([])
+  plt.grid(False)
+  plt.imshow(X_train[i], cmap = plt.cm.binary)
+  plt.xlabel(class_names[y_train[i]])
+plt.show
+
+from keras.models import Sequential
+from keras.layers import Dense, Flatten
+from keras.losses import SparseCategoricalCrossentropy
+
+model = Sequential()
+model = Sequential([
+    Flatten(input_shape = (28, 28)),
+    Dense(128, activation = 'relu'),
+    Dense(10)
+])
+
+model.compile(optimizer = 'adam', loss = SparseCategoricalCrossentropy(from_logits = True), metrics = ['accuracy'])
+model.summary()
+
+model.fit(X_train, y_train, epochs = 10)
+
+test_loss, test_acc = model.evaluate(X_test, y_test, verbose = 2)
+print("\n Test accuracy = ", test_acc)
+
+
+from keras.layers import Softmax
+
+probablity_model = Sequential([model, Softmax()])
+
+
+predictions = probablity_model.predict(X_test)
+
+def plot_image(i, predictions_array, true_label, img):
+  true_label, img = true_label[i], img[i]
+  plt.grid(False)
+  plt.xticks([])
+  plt.yticks([])
+
+  plt.imshow(img, cmap=plt.cm.binary)
+
+  predicted_label = np.argmax(predictions_array)
+  if predicted_label == true_label:
+    color = 'blue'
+  else:
+    color = 'red'
+
+  plt.xlabel("{} {:2.0f}% ({})".format(class_names[predicted_label],
+                                100*np.max(predictions_array),
+                                class_names[true_label]),
+                                color=color)
+
+rows = 5
+cols = 5
+total_images = rows * cols
+plt.figure(figsize = (2*2*cols, 2*rows))
+for i in range(total_images):
+  plt.subplot(rows, cols, i + 1)
+  plot_image(i, predictions[i], y_test, X_test)
+plt.tight_layout()
+plt.show()

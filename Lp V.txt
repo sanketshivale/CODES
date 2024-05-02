@@ -1,0 +1,579 @@
+=======================HPC code==========================
+1.) BFS ---> without omp
+#include<iostream>
+#include<stdlib.h>
+#include<queue>
+using namespace std;
+
+
+class node
+{
+   public:
+    node *left, *right;
+    int data;
+
+};    
+
+class Breadthfs
+{
+	public:
+		node *insert(node *, int);
+		void bfs(node *);
+ 
+};
+
+
+node *insert(node *root, int data)
+// inserts a node in tree
+{
+    if(!root)
+    {
+		root=new node;
+		root->left=NULL;
+		root->right=NULL;
+		root->data=data;
+		return root;
+    }
+
+    queue<node *> q;
+    q.push(root);
+    
+    while(!q.empty())
+    {
+		node *temp=q.front();
+		q.pop();
+    
+		if(temp->left==NULL)
+		{
+			temp->left=new node;
+			temp->left->left=NULL;
+			temp->left->right=NULL;
+			temp->left->data=data;    
+			return root;
+		}
+		else
+		{
+			q.push(temp->left);
+
+		}
+
+		if(temp->right==NULL)
+		{
+			temp->right=new node;
+			temp->right->left=NULL;
+			temp->right->right=NULL;
+			temp->right->data=data;    
+			return root;
+		}
+		else
+		{
+			q.push(temp->right);
+		}
+
+    }
+    
+}
+
+
+void bfs(node *head)
+{
+	queue<node*> q;
+	q.push(head);
+	
+	int qSize;
+	
+	while (!q.empty())
+	{
+		qSize = q.size();
+		#pragma omp parallel for
+			//creates parallel threads
+		for (int i = 0; i < qSize; i++)
+		{
+			node* currNode;
+			#pragma omp critical
+			{
+				currNode = q.front();
+				q.pop();
+				cout<<"\t"<<currNode->data;
+			
+			}// prints parent node
+			#pragma omp critical
+			{
+				if(currNode->left)// push parent's left node in queue
+					q.push(currNode->left);
+				if(currNode->right)
+					q.push(currNode->right);
+			}// push parent's right node in queue   	 
+
+		}
+	}
+
+}
+
+int main() {
+    node *root=NULL;
+    int data;
+    char ans;
+    
+    do
+    {
+		cout<<"\n enter data=>";
+		cin>>data;
+		
+		root=insert(root,data);
+		
+		cout<<"do you want insert one more node?";
+		cin>>ans;
+		
+    }while(ans=='y'||ans=='Y');
+    
+    bfs(root);
+    
+    return 0;
+}
+
+=======================
+
+2.)DFS
+#include <iostream>
+#include <vector>
+#include <stack>
+#include <omp.h>
+using namespace std;
+
+const int MAX = 100000;
+vector<int> graph[MAX];
+bool visited[MAX];
+
+void dfs(int node) {
+    stack<int> s;
+    s.push(node);
+
+    while(!s.empty()) {
+        int curr_node = s.top();
+        s.pop();
+
+        if(!visited[curr_node]) {
+            visited[curr_node] = true;
+
+            if(visited[curr_node]) {
+                cout << curr_node << " ";
+            }
+
+            #pragma omp parallel for
+            for(int i=0; i<graph[curr_node].size(); i++) {
+                int adj_node = graph[curr_node][i];
+                if(!visited[adj_node]) {
+                    s.push(adj_node);
+                }
+            }
+        }
+    }
+}
+
+int main() {
+    int n, m, start_node;
+    cout << "Enter No of Node,Edges, and start node: " ;
+    cin >> n >> m >> start_node;  //n:node, m:edges
+
+    cout << "Enter Pair of edges: " ;
+    for(int i=0; i<m; i++) {
+        int u,v;
+
+        cin >> u >> v; //u and v: Pair of edges
+        graph[u].push_back(v);
+        graph[v].push_back(u);
+    }
+
+    #pragma omp parallel for
+    for(int i=0; i<n; i++) {
+        visited[i] = false;
+    }
+
+    dfs(start_node);
+
+    /*
+    for(int i=0; i<n; i++) {
+        if(visited[i]) {
+            cout << i << " ";
+        }
+    }
+    */
+    return 0;
+}
+
+==================================
+3.) Bubble Sort
+
+#include <iostream>
+#include <stdlib.h>
+#include <omp.h>
+using namespace std;
+
+void bubble(int *, int);
+void swap(int &, int &);
+
+
+void bubble(int *a, int n) 
+{
+    for(int i=0; i<n; i++) {
+        int first = i%2;
+
+        #pragma omp parallel for shared(a, first)
+        for(int j = first; j < n-1; j+=2) 
+        {
+            if(a[j] > a[j+1])
+            {
+                swap(a[j], a[j+1]);
+            }
+        }
+    }
+}
+
+void swap(int &a, int &b) 
+{
+    int test;
+    test = a;
+    a = b;
+    b = test;
+}
+
+int main() 
+{
+    int *a, n;
+    cout << "\nEnter total no of elements=>";
+    cin >> n;
+    a = new int[n];
+    cout << "\nenter elements=>";
+    for(int i=0; i<n; i++) 
+    {
+        cin >> a[i];
+    }
+
+    bubble(a, n);
+
+    cout << "\nsorted array is=>";
+    for(int i=0; i<n; i++) 
+    {
+        cout << a[i] << endl;
+    }
+
+    return 0;
+}
+
+=======================
+4.) Merge sort
+#include <iostream>
+#include <stdlib.h>
+#include <omp.h>
+using namespace std;
+
+void mergesort(int a[], int i, int j);
+void merge(int a[], int i1, int j1, int i2, int j2);
+
+void mergesort(int a[], int i, int j) 
+{
+    int mid;
+    if(i<j)
+    {
+        mid = (i+j)/2;
+
+        #pragma omp parallel sections
+        {
+            #pragma omp section
+            {
+                mergesort(a, i, mid);
+            }
+
+            #pragma omp section
+            {
+                mergesort(a, mid+1, j);
+            }
+        }
+        
+        merge(a, i, mid, mid+1, j);
+    }
+}
+
+void merge(int a[], int i1, int j1, int i2, int j2) 
+{
+    int temp[1000];
+    int i, j, k;
+    i = i1;
+    j = i2;
+    k = 0;
+
+    while(i <= j1 && j <= j2) 
+    {
+        if(a[i] < a[j])
+        {
+            temp[k++] = a[i++];
+        }
+        else 
+        {
+            temp[k++] = a[j++];
+        }
+    }
+
+    while(i <= j1)
+    {
+        temp[k++] = a[i++];        
+    }
+
+    while(j <= j2) 
+    {
+        temp[k++] = a[j++];
+    }
+
+    for(i=i1, j=0; i<=j2; i++,j++) 
+    {
+        a[i] = temp[j];
+    }
+}
+
+int main()
+{
+    int *a, n, i;
+    cout << "\n enter total no of elements=> ";
+    cin >> n;
+    a = new int[n];
+
+    cout << "\n enter elements=>";
+    for(i=0; i<n; i++) 
+    {
+        cin >> a[i];
+    }
+
+    mergesort(a, 0, n-1);
+    cout << "\n sorted array is=> ";
+    for(i=0; i<n; i++) 
+    {
+        cout << "\n" << a[i];
+    }
+
+    return 0;
+}
+
+===========================
+5.) Min Max sum average
+
+#include <iostream>
+//#include <vector>
+#include <omp.h>
+#include <climits>
+using namespace std;
+
+void min_reduction(int arr[], int n) {
+    int min_value = INT_MAX;
+    #pragma omp parallel for reduction(min: min_value)
+    for (int i = 0; i < n; i++) {
+        if (arr[i] < min_value) {
+            min_value = arr[i];
+        }
+    }
+    cout << "Minimum value: " << min_value << endl;
+}
+
+void max_reduction(int arr[], int n) {
+    int max_value = INT_MIN;
+    #pragma omp parallel for reduction(max: max_value)
+    for (int i = 0; i < n; i++) {
+        if (arr[i] > max_value) {
+            max_value = arr[i];
+        }
+    }
+    cout << "Maximum value: " << max_value << endl;
+}
+
+void sum_reduction(int arr[], int n) {
+    int sum = 0;
+    #pragma omp parallel for reduction(+: sum)
+    for (int i = 0; i < n; i++) {
+        sum += arr[i];
+    }
+    cout << "Sum: " << sum << endl;
+}
+
+void average_reduction(int arr[], int n) {
+    int sum = 0;
+    #pragma omp parallel for reduction(+: sum)
+    for (int i = 0; i < n; i++) {
+        sum += arr[i];
+    }
+    cout << "Average: " << (double)sum / (n-1) << endl;
+}
+
+int main() {
+    int *arr,n;
+    cout<<"\n enter total no of elements=>";
+    cin>>n;
+    arr=new int[n];
+    cout<<"\n enter elements=>";
+    
+    for(int i=0;i<n;i++)
+    {
+   	    cin>>arr[i];
+    }
+
+    //   int arr[] = {5, 2, 9, 1, 7, 6, 8, 3, 4};
+    //   int n = size(arr);
+
+    min_reduction(arr, n);
+    max_reduction(arr, n);
+    sum_reduction(arr, n);
+    average_reduction(arr, n);
+}
+
+
+
+
+=======================Deep Learning code==========================
+1.) Linear Regression Boston dataset
+
+import pandas as pd
+import numpy as np
+
+df = pd.read_csv('1_boston_housing.csv')
+df.head(10)
+
+from sklearn.model_selection import train_test_split
+
+X = df.loc[:, df.columns != 'MEDV']
+y = df.loc[:, df.columns == 'MEDV']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=123)
+
+from sklearn.preprocessing import MinMaxScaler
+mms = MinMaxScaler()
+mms.fit(X_train)
+X_train = mms.transform(X_train)
+X_test = mms.transform(X_test)
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+
+model = Sequential()
+
+model.add(Dense(128, input_shape=(13, ), activation='relu', name='dense_1'))
+model.add(Dense(64, activation='relu', name='dense_2'))
+model.add(Dense(1, activation='linear', name='dense_output'))
+
+model.compile(optimizer='adam', loss='mse', metrics=['mae'])
+model.summary()
+
+history = model.fit(X_train, y_train, epochs=100, validation_split=0.05, verbose = 1)
+
+mse_nn, mae_nn = model.evaluate(X_test, y_test)
+
+print('Mean squared error on test data: ', mse_nn)
+print('Mean absolute error on test data: ', mae_nn)
+
+import matplotlib.pyplot as plt
+
+# Predictions on test set
+y_pred = model.predict(X_test)
+
+# Plotting the regression line
+plt.figure(figsize=(10, 6))
+plt.scatter(y_test, y_pred, color='blue', label='Actual vs. Predicted')
+plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'k--', lw=2, color='red', label='Regression Line')
+plt.xlabel('Actual Prices ($1000s)')
+plt.ylabel('Predicted Prices ($1000s)')
+plt.title('Actual vs. Predicted Prices')
+plt.legend()
+plt.show()
+
+============================
+2.) Binary Classification IMDB dataset
+
+from tensorflow.keras.datasets import imdb
+
+(train_data, train_label), (test_data, test_label) = imdb.load_data(num_words = 10000)
+
+import numpy as np
+
+def vectorize_sequences(sequences, dimensions = 10000):
+    results = np.zeros((len(sequences), dimensions))
+    for i, sequences in enumerate(sequences):
+        results[i, sequences] = 1
+    
+    return results
+
+x_train = vectorize_sequences(train_data)
+x_test = vectorize_sequences(test_data)
+
+y_train = np.asarray(train_label).astype('float32')
+y_test = np.asarray(test_label).astype('float32')
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+
+model = Sequential()
+model.add(Dense(16, input_shape=(10000, ), activation="relu"))
+model.add(Dense(16, activation="relu"))
+model.add(Dense(1, activation="sigmoid"))
+
+model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
+
+model.summary()
+
+history = model.fit(x_train, y_train, validation_split=0.3, epochs = 20, verbose = 1, batch_size=512)
+
+mse,mae = model.evaluate(x_test,y_test)
+
+print('MSE ',mse)
+print('MAE ',mae)
+
+y_predictions = model.predict(x_test)
+
+tests = []
+for i in y_test:
+    tests.append(int(i))
+
+predictions = []
+for i in y_predictions:
+    if i[0] > 0.5:
+        predictions.append(1)
+    else:
+        predictions.append(0)
+
+===============================
+3.) Classification of fashion MNIST dataset
+
+from tensorflow.keras.datasets import fashion_mnist
+
+(train_x, train_y), (test_x, test_y) = fashion_mnist.load_data()
+
+train_x = train_x.reshape(-1, 28, 28, 1)
+test_x = test_x.reshape(-1, 28, 28, 1)
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Flatten, MaxPooling2D, Conv2D
+
+model = Sequential()
+
+model.add(Conv2D(filters=64, kernel_size=(3,3), activation='relu', input_shape=(28,28,1)))  # Correct input shape
+model.add(MaxPooling2D(pool_size=(2,2)))
+model.add(Flatten())
+model.add(Dense(128, activation='relu'))
+model.add(Dense(10, activation = "softmax"))
+
+model.summary()
+
+model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+
+import numpy as np
+model.fit(train_x.astype(np.float32), train_y.astype(np.float32), epochs = 5, validation_split = 0.2)
+
+loss, acc = model.evaluate(test_x, test_y)
+
+labels = ['t_shirt', 'trouser', 'pullover', 'dress', 'coat', 'sandal', 'shirt', 'sneaker',   'bag', 'ankle_boots']
+
+predictions = model.predict(test_x[:1])
+
+label = labels[np.argmax(predictions)]
+
+
+import matplotlib.pyplot as plt
+print(label)
+plt.imshow(test_x[:1][0])
+plt.show
